@@ -1,264 +1,169 @@
-# EPG Refresh Scheduler for Dispatcharr
+# EPG Refresh Scheduler
 
-A powerful plugin that enables flexible, cron-based scheduling for EPG (Electronic Program Guide) refreshes in Dispatcharr. Instead of relying solely on fixed refresh intervals, you can now schedule EPG updates at specific times using familiar cron expressions.
+Schedule M3U playlist and EPG data refreshes with cron expressions. Example "0 3 * * *" to run everyday at 3am.
 
 ## Features
 
-- ✅ **Flexible Scheduling** - Use cron expressions to schedule EPG refreshes at exact times
-- ✅ **Individual EPG Control** - Configure separate schedules for each EPG source
-- ✅ **Advanced Cron Support** - Full support for `/` (step values) and `,` (lists) operators
-- ✅ **Automatic Management** - Schedules are automatically created and managed via Celery Beat
-- ✅ **Real-time Validation** - Validates cron expressions before saving
-- ✅ **Next Run Preview** - See when each EPG is scheduled to refresh next
-- ✅ **Active EPG Detection** - Only shows non-dummy, active EPG sources
+- 📡 **M3U Account Scheduling** - Automatically refresh M3U playlists on schedule
+- 📺 **EPG Source Scheduling** - Automatically refresh EPG data on schedule
+- 🌍 **Timezone Support** - Set schedules in your timezone (33 timezones supported)
+- ⏰ **Flexible Scheduling** - Use standard cron expressions
+- 🔄 **Auto-normalization** - Converts `0/X` to `*/X` format automatically
+- 🎯 **Individual Schedules** - Different schedule for each M3U/EPG source
+- 📊 **Schedule Management** - View and sync active schedules
 
 ## Installation
 
-### 1. Download the Plugin
-
-Download the plugin as a ZIP file or clone this repository.
-
-### 2. Upload to Dispatcharr
-
-1. Navigate to **Settings → Plugins**
-2. Click **Import Plugin**
-3. Upload the ZIP file
-4. Enable the plugin when prompted
-
-### 3. Restart Dispatcharr
-
-**IMPORTANT:** You must restart the Dispatcharr container after installation:
-
-```bash
-docker restart dispatcharr
-```
+1. Download `epg_refresh_scheduler.zip`
+2. Go to Dispatcharr → Settings → Plugins
+3. Click "Upload Plugin"
+4. Select the ZIP file
+5. Enable the plugin
+6. Restart Dispatcharr: `docker restart dispatcharr`
 
 ## Configuration
 
-### Cron Expression Format
+### 1. Select Timezone
+Choose your timezone from the dropdown (default: UTC). All schedule times will be converted to UTC automatically.
 
-Cron expressions use 5 fields: `minute hour day month day_of_week`
+**Example timezones:**
+- US/Central (CST/CDT) - Chicago
+- US/Eastern (EST/EDT) - New York
+- US/Pacific (PST/PDT) - Los Angeles
+- Europe/London (GMT/BST)
+- Asia/Tokyo (JST)
 
-#### Field Values
+### 2. Schedule M3U Accounts
 
-| Field | Values | Special Characters |
-|-------|--------|-------------------|
-| Minute | 0-59 | `*` `,` `-` `/` |
-| Hour | 0-23 | `*` `,` `-` `/` |
-| Day of Month | 1-31 | `*` `,` `-` `/` |
-| Month | 1-12 | `*` `,` `-` `/` |
-| Day of Week | 0-6 (0=Sunday) | `*` `,` `-` `/` |
+For each M3U account, check "Enable" and enter a cron expression:
 
-#### Special Characters
+**Format:** `minute hour day month day_of_week`
 
-- `*` - Any value (every minute, hour, etc.)
-- `,` - List of values (e.g., `1,3,5` = 1st, 3rd, and 5th)
-- `-` - Range of values (e.g., `1-5` = 1 through 5)
-- `/` - Step values (e.g., `*/5` = every 5th value)
+**Examples:**
+- `0 2 * * *` - 2:00 AM daily
+- `0 */12 * * *` - Every 12 hours
+- `0 3 * * 0` - 3:00 AM on Sundays only
+- `30 4 * * *` - 4:30 AM daily
+- `*/5 * * * *` - Every 5 minutes
 
-### Common Examples
+### 3. Schedule EPG Sources
 
-| Schedule | Cron Expression | Description |
-|----------|----------------|-------------|
-| Every day at 3:00 AM | `0 3 * * *` | Standard daily refresh |
-| Every 4 hours | `0 */4 * * *` | Frequent updates |
-| Twice daily (midnight & noon) | `0 0,12 * * *` | Morning and evening |
-| Weekdays at 8:30 AM | `30 8 * * 1-5` | Business days only |
-| Mon/Wed/Fri at 6:00 PM | `0 18 * * 1,3,5` | Specific weekdays |
-| Every 15 minutes | `*/15 * * * *` | Very frequent updates |
-| First day of month at midnight | `0 0 1 * *` | Monthly refresh |
-| Every 6 hours starting at 2 AM | `0 2-23/6 * * *` | 2 AM, 8 AM, 2 PM, 8 PM |
+Same process as M3U accounts - enable and set cron schedule.
 
-## Usage
+**Examples:**
+- `0 3 * * *` - 3:00 AM daily
+- `0 */6 * * *` - Every 6 hours
+- `30 2 * * *` - 2:30 AM daily
 
-### Setting Up Schedules
+### 4. Save Settings
 
-1. Navigate to **Settings → Plugins → EPG Refresh Scheduler → Settings**
-2. For each EPG source you want to schedule:
-   - Enable the schedule by checking **Enable Schedule for: [EPG Name]**
-   - Enter a cron expression in **Schedule for: [EPG Name]**
-3. Click **Save Settings**
+Click "Save Settings" to activate the schedules.
 
-### Available Actions
+## Cron Expression Guide
 
-Navigate to **Settings → Plugins → EPG Refresh Scheduler** and use these actions:
+Cron format: `minute hour day month day_of_week`
 
-#### 🔄 Refresh All Scheduled EPGs Now
-Immediately triggers a refresh for all EPG sources that have schedules enabled. Useful for testing or forcing an update.
+| Field | Values | Special |
+|-------|--------|---------|
+| minute | 0-59 | `*/5` = every 5 minutes |
+| hour | 0-23 | `*/6` = every 6 hours |
+| day | 1-31 | `*` = every day |
+| month | 1-12 | `*` = every month |
+| day_of_week | 0-6 (Sun-Sat) | `*` = every day |
 
-#### 📅 View Active Schedules
-Displays all currently active EPG refresh schedules with their cron expressions.
+**Special Characters:**
+- `*` - Every value (any)
+- `*/X` - Every X units
+- `X-Y` - Range from X to Y
+- `X,Y,Z` - Specific values
 
-#### ✓ Validate All Schedules
-Checks if all configured cron expressions are valid. Helps identify configuration errors.
+**Common Examples:**
+- `0 3 * * *` - 3:00 AM every day
+- `0 */6 * * *` - Every 6 hours (midnight, 6am, noon, 6pm)
+- `*/30 * * * *` - Every 30 minutes
+- `0 0 * * 0` - Midnight every Sunday
+- `0 8 * * 1-5` - 8:00 AM Monday through Friday
+- `0 2,14 * * *` - 2:00 AM and 2:00 PM daily
 
-#### ⏰ Show Next Run Times
-Shows the next scheduled run time for each EPG, including how long until the next refresh.
+**Note:** The plugin automatically converts `0/X` to `*/X` format for compatibility.
 
-## How It Works
+## Timezone Conversion
 
-### Celery Beat Integration
+When you select a timezone and use simple time expressions (like `0 3 * * *`), the plugin automatically converts them to UTC.
 
-This plugin integrates with Celery Beat (Dispatcharr's task scheduler) to manage EPG refresh schedules:
+**Example with US/Central:**
+- You enter: `0 22 * * *` (10:00 PM Central)
+- Converts to: `0 3 * * *` (3:00 AM UTC, which is 10:00 PM Central - 5 hours during CDT)
 
-1. **Schedule Creation** - When you enable a schedule, the plugin creates a `CrontabSchedule` entry and a `PeriodicTask` that calls `apps.epg.tasks.refresh_epg_source`
-2. **Automatic Execution** - Celery Beat monitors the schedules and automatically triggers EPG refreshes at the specified times
-3. **Background Processing** - All refreshes run in the background without blocking the UI
-4. **Cleanup** - When you disable a schedule or unload the plugin, all tasks are automatically removed
+**Complex expressions stay UTC-relative:**
+- `*/6 * * * *` (every 6 hours) - No conversion, runs every 6 hours in UTC
+- `0 */12 * * *` (every 12 hours) - No conversion, timezone-independent
 
-### Task Naming
+This is intentional - expressions like "every 6 hours" are already timezone-independent!
 
-Scheduled tasks are named: `epg_refresh_scheduler_epg_{epg_id}`
+## Actions
 
-You can view these tasks in the Django admin if needed (requires superuser access).
+### 🔄 Sync Schedules
+Reloads your settings and updates all Celery Beat schedules. Use this after making changes.
+
+### 📅 View Active Schedules
+Shows all active scheduled tasks in Celery Beat with their cron expressions (in UTC).
 
 ## Troubleshooting
 
-### Schedule Not Running
+### Schedules not running?
 
-**Problem:** EPG doesn't refresh at the scheduled time
-
-**Solutions:**
-1. Verify the schedule is enabled in plugin settings
-2. Check that the EPG source itself is active (not disabled in M3U & EPG Manager)
-3. Validate the cron expression using the "Validate All Schedules" action
-4. Check Celery Beat logs: `docker logs dispatcharr | grep celery`
-5. Ensure Celery Beat is running: `docker exec dispatcharr ps aux | grep beat`
-
-### Invalid Cron Expression
-
-**Problem:** Error when saving settings
-
-**Solutions:**
-1. Verify your cron expression has exactly 5 fields separated by spaces
-2. Check that values are within valid ranges
-3. Use the "Validate All Schedules" action to identify the problematic expression
-4. Refer to the cron examples above
-
-### Plugin Not Visible
-
-**Problem:** Plugin doesn't appear in the Plugins page
-
-**Solutions:**
-1. Ensure the plugin folder is in `/data/plugins/epg_refresh_scheduler/`
-2. Check that `plugin.py` exists and contains the `Plugin` class
-3. Restart Dispatcharr: `docker restart dispatcharr`
-4. Check logs for import errors: `docker logs dispatcharr`
-
-### Schedules Not Persisting
-
-**Problem:** Schedules disappear after restart
-
-**Solutions:**
-1. Ensure the plugin is **enabled** (toggle switch on the plugin card)
-2. Verify settings are saved (click Save Settings after changes)
-3. Check database connectivity
-4. Review Dispatcharr logs for errors
-
-## Advanced Usage
-
-### Staggered Refreshes
-
-To avoid refreshing all EPGs simultaneously (which can cause load spikes), stagger your schedules:
-
-```
-EPG 1: 0 3 * * *   (3:00 AM)
-EPG 2: 0 4 * * *   (4:00 AM)
-EPG 3: 0 5 * * *   (5:00 AM)
+**Check logs:**
+```bash
+docker logs -f dispatcharr | grep -i epg_refresh_scheduler
 ```
 
-Or use minute offsets:
-
-```
-EPG 1: 0 3 * * *   (3:00 AM)
-EPG 2: 15 3 * * *  (3:15 AM)
-EPG 3: 30 3 * * *  (3:30 AM)
+**Verify schedules are created:**
+```bash
+docker exec dispatcharr python manage.py shell -c "from django_celery_beat.models import PeriodicTask; tasks = PeriodicTask.objects.filter(name__contains='epg_refresh_scheduler'); [print(f'{t.name}: {t.crontab}') for t in tasks]"
 ```
 
-### High-Frequency Updates
+**Common issues:**
+1. **Forgot to save settings** - Click "Save Settings" after making changes
+2. **Invalid cron expression** - Check the format is correct
+3. **Celery not running** - Restart Dispatcharr
+4. **Wrong timezone** - Verify timezone is set correctly
 
-For EPGs that update frequently (like sports channels):
+### M3U schedules not executing?
 
-```
-*/30 * * * *    (Every 30 minutes)
-*/15 * * * *    (Every 15 minutes)
-0,30 * * * *    (On the hour and half-hour)
-```
+Make sure you're on v1.3.0 or later. Earlier versions had the wrong task name.
 
-### Combining with Built-in Intervals
+### Slash notation not working?
 
-You can use both:
-- **This plugin** for scheduled refreshes at specific times
-- **Built-in refresh interval** as a fallback or for different purposes
+Upgrade to v1.3.0 or later. The plugin now automatically converts `0/X` to `*/X`.
 
-However, be aware that both will trigger refreshes, so you may want to disable the built-in interval if using this plugin.
+## How It Works
 
-## Best Practices
-
-1. **Test First** - Use "Show Next Run Times" to verify schedules before relying on them
-2. **Stagger Updates** - Don't schedule all EPGs at the same time
-3. **Consider Time Zones** - All times are in UTC (Dispatcharr's default)
-4. **Monitor Performance** - Very frequent updates can impact performance
-5. **Backup Settings** - Document your cron expressions in case you need to reconfigure
-6. **Use Validation** - Always validate expressions before saving
-
-## Technical Details
-
-### Dependencies
-
-- `croniter` - For parsing and validating cron expressions
-- `django-celery-beat` - For managing Celery Beat schedules (already included in Dispatcharr)
-
-### Database Tables Used
-
-- `apps_epg_epgsource` - EPG source data
-- `apps_plugins_pluginsettings` - Plugin configuration
-- `django_celery_beat_periodictask` - Scheduled tasks
-- `django_celery_beat_crontabschedule` - Cron schedules
-
-### API Integration
-
-The plugin calls `apps.epg.tasks.refresh_epg_source` which is Dispatcharr's built-in task for refreshing individual EPG sources.
+1. **You configure** schedules in your timezone
+2. **Plugin converts** simple times to UTC
+3. **Celery Beat** triggers tasks at scheduled times
+4. **Tasks execute:**
+   - M3U: `apps.m3u.tasks.refresh_single_m3u_account(m3u_id)`
+   - EPG: `apps.epg.tasks.refresh_all_epg_data()`
 
 ## Version History
 
-### v1.0.0 (Initial Release)
-- Cron-based scheduling for EPG refreshes
-- Support for `/` and `,` operators
-- Individual schedules per EPG source
-- Real-time schedule validation
-- Next run time preview
-- Manual refresh trigger
-- Active schedule viewer
-
-## Contributing
-
-Found a bug or have a suggestion? Please submit an issue or pull request!
-
-## License
-
-This plugin follows the same license as Dispatcharr:
-**CC BY-NC-SA 4.0** (Creative Commons Attribution-NonCommercial-ShareAlike 4.0)
-
-- ✅ Share and adapt the plugin
-- ✅ Give appropriate credit
-- ❌ No commercial use
-- ✅ Share modifications under the same license
-
-## Credits
-
-- **Dispatcharr Team** - For creating an excellent IPTV management platform
-- **Backup Plugin Author (mjcocat)** - For the scheduling reference implementation
-- **Community Contributors** - For testing and feedback
+- **v1.3.0** - Fixed slash notation (0/X → */X), updated description
+- **v1.2.6** - Fixed M3U task name to use correct task
+- **v1.2.5** - Cleaner UI with prefixes, hidden "custom" account
+- **v1.2.4** - Added examples in section headers
+- **v1.2.3** - UI improvements, removed unnecessary fields
+- **v1.2.2** - Fixed M3U URL error
+- **v1.2.1** - Fixed M3U display error
+- **v1.2.0** - Added M3U account scheduling
+- **v1.1.1** - Fixed default values, improved validation
+- **v1.1.0** - Timezone dropdown restored
+- **v1.0.8** - Initial release with EPG scheduling
 
 ## Support
 
-- **Dispatcharr Documentation:** https://dispatcharr.github.io/Dispatcharr-Docs/
-- **Dispatcharr GitHub:** https://github.com/Dispatcharr/Dispatcharr
-- **Discord:** Join the Dispatcharr community
+For issues or questions, please check the Dispatcharr documentation or community forums.
 
----
+## License
 
-Made with ❤️ for the Dispatcharr community
-
-**Note:** This plugin requires Dispatcharr v0.9.0 or higher with the plugin framework enabled.
+Community Plugin - Free to use and modify
