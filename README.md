@@ -2,6 +2,18 @@
 
 Schedule M3U playlist and EPG data refreshes with cron expressions. Example "0 3 * * *" to run everyday at 3am.
 
+v1.4.0 (Latest)
+
+🗑️ Remove All Schedules action
+⏸️ Disable Built-in Refresh Intervals action
+Confirmation prompts for destructive actions
+
+v1.3.0
+
+Fixed slash notation (0/X → */X)
+Auto-normalization of cron expressions
+Updated description
+
 ## Features
 
 - 📡 **M3U Account Scheduling** - Automatically refresh M3U playlists on schedule
