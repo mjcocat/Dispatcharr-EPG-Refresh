@@ -10,7 +10,6 @@ A powerful plugin that enables flexible, cron-based scheduling for EPG (Electron
 - ✅ **Automatic Management** - Schedules are automatically created and managed via Celery Beat
 - ✅ **Real-time Validation** - Validates cron expressions before saving
 - ✅ **Next Run Preview** - See when each EPG is scheduled to refresh next
-- ✅ **Manual Triggers** - Instantly refresh all scheduled EPGs with one click
 - ✅ **Active EPG Detection** - Only shows non-dummy, active EPG sources
 
 ## Installation
