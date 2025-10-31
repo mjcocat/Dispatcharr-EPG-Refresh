@@ -1,0 +1,14 @@
+{
+  "key": "epg_refresh_scheduler",
+  "name": "EPG Refresh Scheduler",
+  "version": "1.0.5",
+  "description": "Schedule EPG refreshes with flexible cron-like expressions (supports / and , operators). No external dependencies.",
+  "author": "Community Plugin",
+  "license": "CC BY-NC-SA 4.0",
+  "requires": {
+    "dispatcharr": ">=0.9.0"
+  },
+  "dependencies": [],
+  "homepage": "https://github.com/Dispatcharr/Dispatcharr",
+  "tags": ["epg", "scheduler", "cron", "automation", "timezone"]
+}

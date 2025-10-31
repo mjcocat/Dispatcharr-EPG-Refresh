@@ -1,0 +1,2 @@
+# No external dependencies required
+# This plugin uses django-celery-beat which is already included in Dispatcharr
