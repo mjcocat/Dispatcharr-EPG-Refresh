@@ -16,7 +16,7 @@ class Plugin:
     # Plugin metadata
     key = "epg_refresh_scheduler"
     name = "EPG Refresh Scheduler"
-    version = "1.3.0"
+    version = "1.4.0"
     description = "Schedule M3U playlist and EPG data refreshes with cron expressions. Example \"0 3 * * *\" to run everyday at 3am."
     author = "Community Plugin"
     
@@ -165,6 +165,18 @@ class Plugin:
                 "id": "view_schedules",
                 "label": "📅 View Active Schedules",
                 "description": "Show active Celery Beat schedules"
+            },
+            {
+                "id": "cleanup_all_schedules",
+                "label": "🗑️ Remove All Schedules",
+                "description": "Delete all schedules created by this plugin (use before uninstalling)",
+                "confirm": True
+            },
+            {
+                "id": "disable_refresh_intervals",
+                "label": "⏸️ Disable Built-in Refresh Intervals",
+                "description": "Set all M3U and EPG refresh intervals to 0 (prevents conflicts with scheduler)",
+                "confirm": True
             }
         ]
         
@@ -647,6 +659,10 @@ class Plugin:
                 return self._sync_schedules(settings, logger)
             elif action == "view_schedules":
                 return self._view_schedules(logger)
+            elif action == "cleanup_all_schedules":
+                return self._cleanup_all_schedules(logger)
+            elif action == "disable_refresh_intervals":
+                return self._disable_refresh_intervals(logger)
             else:
                 return {"success": False, "message": f"Unknown action: {action}"}
                 
@@ -763,4 +779,90 @@ class Plugin:
             
         except Exception as e:
             logger.error(f"Error viewing schedules: {e}", exc_info=True)
+            return {"success": False, "message": f"Error: {str(e)}"}
+    
+    def _cleanup_all_schedules(self, logger) -> Dict[str, Any]:
+        """Remove all schedules created by this plugin"""
+        try:
+            from django_celery_beat.models import PeriodicTask
+            
+            deleted_count = 0
+            deleted_names = []
+            
+            # Delete all M3U schedules
+            m3u_accounts = self._get_m3u_accounts()
+            for m3u in m3u_accounts:
+                task_name = f"epg_refresh_scheduler_m3u_{m3u.id}"
+                count = PeriodicTask.objects.filter(name=task_name).delete()[0]
+                if count > 0:
+                    deleted_count += count
+                    deleted_names.append(f"M3U - {m3u.name}")
+                    logger.info(f"Deleted schedule: {task_name}")
+            
+            # Delete all EPG schedules
+            epg_sources = self._get_epg_sources()
+            for epg in epg_sources:
+                task_name = f"epg_refresh_scheduler_epg_{epg.id}"
+                count = PeriodicTask.objects.filter(name=task_name).delete()[0]
+                if count > 0:
+                    deleted_count += count
+                    deleted_names.append(f"EPG - {epg.name}")
+                    logger.info(f"Deleted schedule: {task_name}")
+            
+            if deleted_count > 0:
+                message = f"✅ Removed {deleted_count} schedule(s):\n\n" + "\n".join([f"  • {name}" for name in deleted_names])
+            else:
+                message = "ℹ️ No schedules found to remove"
+            
+            return {"success": True, "message": message}
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up schedules: {e}", exc_info=True)
+            return {"success": False, "message": f"Error: {str(e)}"}
+    
+    def _disable_refresh_intervals(self, logger) -> Dict[str, Any]:
+        """Disable built-in refresh intervals for all M3U accounts and EPG sources"""
+        try:
+            updated_m3u = []
+            updated_epg = []
+            
+            # Disable M3U refresh intervals
+            m3u_accounts = self._get_m3u_accounts()
+            for m3u in m3u_accounts:
+                if hasattr(m3u, 'refresh_interval') and m3u.refresh_interval != 0:
+                    m3u.refresh_interval = 0
+                    m3u.save()
+                    updated_m3u.append(m3u.name)
+                    logger.info(f"Disabled refresh interval for M3U: {m3u.name}")
+            
+            # Disable EPG refresh intervals
+            epg_sources = self._get_epg_sources()
+            for epg in epg_sources:
+                if hasattr(epg, 'refresh_interval') and epg.refresh_interval != 0:
+                    epg.refresh_interval = 0
+                    epg.save()
+                    updated_epg.append(epg.name)
+                    logger.info(f"Disabled refresh interval for EPG: {epg.name}")
+            
+            messages = []
+            if updated_m3u:
+                messages.append(f"📺 Disabled {len(updated_m3u)} M3U refresh interval(s):")
+                messages.extend([f"  • {name}" for name in updated_m3u])
+            if updated_epg:
+                if updated_m3u:
+                    messages.append("")  # Blank line
+                messages.append(f"📅 Disabled {len(updated_epg)} EPG refresh interval(s):")
+                messages.extend([f"  • {name}" for name in updated_epg])
+            
+            if not updated_m3u and not updated_epg:
+                message = "ℹ️ All refresh intervals are already set to 0"
+            else:
+                total = len(updated_m3u) + len(updated_epg)
+                messages.insert(0, f"✅ Disabled {total} built-in refresh interval(s)\n")
+                message = "\n".join(messages)
+            
+            return {"success": True, "message": message}
+            
+        except Exception as e:
+            logger.error(f"Error disabling refresh intervals: {e}", exc_info=True)
             return {"success": False, "message": f"Error: {str(e)}"}
