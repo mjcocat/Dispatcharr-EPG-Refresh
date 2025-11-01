@@ -16,7 +16,7 @@ class Plugin:
     # Plugin metadata
     key = "epg_refresh_scheduler"
     name = "EPG Refresh Scheduler"
-    version = "1.4.0"
+    version = "1.6.0"
     description = "Schedule M3U playlist and EPG data refreshes with cron expressions. Example \"0 3 * * *\" to run everyday at 3am."
     author = "Community Plugin"
     
@@ -25,7 +25,7 @@ class Plugin:
         self.logger = logger
         self.celery_app = None
         self.scheduled_tasks = {}
-        
+    
     @property
     def settings(self) -> Dict[str, Any]:
         """Plugin settings - returns empty dict as settings are managed by Dispatcharr"""
@@ -34,13 +34,26 @@ class Plugin:
     @property
     def fields(self) -> List[Dict[str, Any]]:
         """Configuration fields"""
+        # Load saved settings only (no auto-population from Celery Beat)
+        saved = {}
+        try:
+            from apps.plugins.models import PluginSetting
+            plugin_setting = PluginSetting.objects.filter(plugin_key=self.key).first()
+            if plugin_setting and hasattr(plugin_setting, 'value'):
+                import json
+                saved = json.loads(plugin_setting.value) if isinstance(plugin_setting.value, str) else plugin_setting.value
+                if not isinstance(saved, dict):
+                    saved = {}
+        except Exception as e:
+            self.logger.debug(f"Could not load saved settings: {e}")
+        
         fields = [
             {
                 "id": "timezone",
                 "type": "select",
                 "label": "Timezone",
                 "description": "Select your timezone. Schedule times below will be converted to UTC.",
-                "default": "UTC",
+                "default": saved.get("timezone", "US/Central"),
                 "options": [
                     {"value": "UTC", "label": "UTC (Coordinated Universal Time)"},
                     {"value": "US/Eastern", "label": "US/Eastern (EST/EDT) - New York"},
@@ -91,20 +104,25 @@ class Plugin:
                     # Get type safely
                     m3u_type = getattr(m3u, 'type', getattr(m3u, 'source_type', 'M3U'))
                     
+                    # Get values from active schedules or saved settings
+                    enabled_key = f"m3u_{m3u.id}_enabled"
+                    schedule_key = f"m3u_{m3u.id}_schedule"
+                    
                     fields.extend([
                         {
-                            "id": f"m3u_{m3u.id}_enabled",
+                            "id": enabled_key,
                             "type": "boolean",
                             "label": f"M3U - {m3u.name}",
                             "description": f"ID: {m3u.id} | Type: {m3u_type} | Examples: 0 2 * * * (2am) | 0 */12 * * * (every 12h)",
-                            "default": False
+                            "default": saved.get(enabled_key, False)
                         },
                         {
-                            "id": f"m3u_{m3u.id}_schedule",
+                            "id": schedule_key,
                             "type": "text",
                             "label": f"  └─ Schedule",
                             "description": "Cron format: minute hour day month day_of_week",
-                            "placeholder": "0 2 * * *"
+                            "placeholder": "0 2 * * *",
+                            "default": saved.get(schedule_key, "")
                         }
                     ])
             
@@ -115,20 +133,25 @@ class Plugin:
                     # Truncate URL for display
                     url_display = epg.url[:50] + "..." if len(epg.url) > 50 else epg.url
                     
+                    # Get values from active schedules or saved settings
+                    enabled_key = f"epg_{epg.id}_enabled"
+                    schedule_key = f"epg_{epg.id}_schedule"
+                    
                     fields.extend([
                         {
-                            "id": f"epg_{epg.id}_enabled",
+                            "id": enabled_key,
                             "type": "boolean",
                             "label": f"EPG - {epg.name}",
                             "description": f"ID: {epg.id} | Source: {url_display} | Examples: 0 3 * * * (3am) | 0 */6 * * * (every 6h)",
-                            "default": False
+                            "default": saved.get(enabled_key, False)
                         },
                         {
-                            "id": f"epg_{epg.id}_schedule",
+                            "id": schedule_key,
                             "type": "text",
                             "label": f"  └─ Schedule",
                             "description": "Cron format: minute hour day month day_of_week",
-                            "placeholder": "0 3 * * *"
+                            "placeholder": "0 3 * * *",
+                            "default": saved.get(schedule_key, "")
                         }
                     ])
             
@@ -225,7 +248,9 @@ class Plugin:
             
         try:
             settings = context.get("settings", {})
-            user_timezone = settings.get("timezone", "UTC")
+            user_timezone = settings.get("timezone", "US/Central")
+            
+            self.logger.info(f"Setting up schedules with timezone: {user_timezone}")
             
             # Setup M3U account schedules
             m3u_accounts = self._get_m3u_accounts()
@@ -562,10 +587,11 @@ class Plugin:
     def save_settings(self, settings: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """Save settings and sync schedules"""
         try:
-            self.logger.info(f"Saving settings: {settings}")
+            self.logger.info(f"Saving settings with keys: {list(settings.keys())}")
             
-            # Get timezone setting
-            user_timezone = settings.get("timezone", "UTC")
+            # Get timezone setting with proper default
+            user_timezone = settings.get("timezone", "US/Central")
+            self.logger.info(f"Using timezone: {user_timezone}")
             
             m3u_synced = []
             m3u_removed = []
@@ -673,7 +699,31 @@ class Plugin:
     def _sync_schedules(self, settings: Dict[str, Any], logger) -> Dict[str, Any]:
         """Sync schedules from settings"""
         try:
-            user_timezone = settings.get("timezone", "UTC")
+            # If settings are empty, load from saved settings
+            if not settings:
+                logger.info("Settings empty, loading from saved settings")
+                try:
+                    from apps.plugins.models import PluginSetting
+                    plugin_setting = PluginSetting.objects.filter(plugin_key=self.key).first()
+                    if plugin_setting and hasattr(plugin_setting, 'value'):
+                        import json
+                        saved = json.loads(plugin_setting.value) if isinstance(plugin_setting.value, str) else plugin_setting.value
+                        if isinstance(saved, dict):
+                            settings = saved
+                            logger.info(f"Loaded saved settings: {len(settings)} keys")
+                except Exception as e:
+                    logger.debug(f"Could not load saved settings: {e}")
+                
+                if not settings:
+                    logger.warning("No saved settings found")
+                    return {
+                        "success": False,
+                        "message": "⚠️ No saved settings found. Please configure and save settings first."
+                    }
+            
+            user_timezone = settings.get("timezone", "US/Central")
+            logger.info(f"Syncing schedules with timezone: {user_timezone}")
+            logger.info(f"Settings keys: {list(settings.keys())}")
             m3u_synced = []
             m3u_removed = []
             epg_synced = []
@@ -734,6 +784,21 @@ class Plugin:
         """View active schedules"""
         try:
             from django_celery_beat.models import PeriodicTask
+            import pytz
+            from datetime import datetime
+            
+            # Get user's timezone from settings
+            user_timezone = "US/Central"  # Default
+            try:
+                from apps.plugins.models import PluginSetting
+                plugin_setting = PluginSetting.objects.filter(plugin_key=self.key).first()
+                if plugin_setting and hasattr(plugin_setting, 'value'):
+                    import json
+                    saved = json.loads(plugin_setting.value) if isinstance(plugin_setting.value, str) else plugin_setting.value
+                    if isinstance(saved, dict):
+                        user_timezone = saved.get("timezone", "US/Central")
+            except Exception as e:
+                logger.debug(f"Error loading timezone: {e}")
             
             m3u_schedules = []
             epg_schedules = []
@@ -747,7 +812,14 @@ class Plugin:
                 if task and task.crontab:
                     cron = task.crontab
                     cron_expr = f"{cron.minute} {cron.hour} {cron.day_of_month} {cron.month_of_year} {cron.day_of_week}"
-                    m3u_schedules.append(f"  • {m3u.name}: {cron_expr} UTC")
+                    
+                    # Try to convert back to user's timezone for display
+                    local_time = self._convert_utc_to_local(cron.minute, cron.hour, user_timezone)
+                    
+                    if local_time:
+                        m3u_schedules.append(f"  • {m3u.name}: {cron_expr} UTC ({local_time} {user_timezone})")
+                    else:
+                        m3u_schedules.append(f"  • {m3u.name}: {cron_expr} UTC")
             
             # Get EPG schedules
             epg_sources = self._get_epg_sources()
@@ -758,7 +830,14 @@ class Plugin:
                 if task and task.crontab:
                     cron = task.crontab
                     cron_expr = f"{cron.minute} {cron.hour} {cron.day_of_month} {cron.month_of_year} {cron.day_of_week}"
-                    epg_schedules.append(f"  • {epg.name}: {cron_expr} UTC")
+                    
+                    # Try to convert back to user's timezone for display
+                    local_time = self._convert_utc_to_local(cron.minute, cron.hour, user_timezone)
+                    
+                    if local_time:
+                        epg_schedules.append(f"  • {epg.name}: {cron_expr} UTC ({local_time} {user_timezone})")
+                    else:
+                        epg_schedules.append(f"  • {epg.name}: {cron_expr} UTC")
             
             messages = []
             if m3u_schedules:
@@ -781,6 +860,42 @@ class Plugin:
             logger.error(f"Error viewing schedules: {e}", exc_info=True)
             return {"success": False, "message": f"Error: {str(e)}"}
     
+    def _convert_utc_to_local(self, minute: str, hour: str, user_timezone: str) -> str:
+        """Convert UTC time back to user's timezone for display
+        
+        Returns formatted time string like '3:00 AM' or None if conversion not applicable
+        """
+        try:
+            # Only convert simple numeric times
+            if not (minute.isdigit() and hour.isdigit()):
+                return None
+            
+            if user_timezone == "UTC":
+                return None  # No need to show conversion for UTC
+            
+            import pytz
+            from datetime import datetime
+            
+            utc_tz = pytz.utc
+            user_tz = pytz.timezone(user_timezone)
+            
+            # Create a UTC datetime
+            utc_time = datetime.now(utc_tz).replace(
+                hour=int(hour),
+                minute=int(minute),
+                second=0,
+                microsecond=0
+            )
+            
+            # Convert to user's timezone
+            local_time = utc_time.astimezone(user_tz)
+            
+            # Format as readable time
+            return local_time.strftime("%-I:%M %p").lstrip('0')  # e.g., "3:00 AM"
+            
+        except Exception as e:
+            self.logger.error(f"Error converting time: {e}")
+            return None    
     def _cleanup_all_schedules(self, logger) -> Dict[str, Any]:
         """Remove all schedules created by this plugin"""
         try:
