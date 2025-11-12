@@ -2,7 +2,7 @@
 
 Schedule M3U playlist and EPG data refreshes with cron expressions. Example "0 3 * * *" to run everyday at 3am.
 
-#Quick setup
+# Quick setup
 
 1. Disable Built-in Refresh Intervals
 2. Update your timezone to you preferred timezone 
