@@ -15,7 +15,11 @@ Schedule M3U playlist and EPG data refreshes with cron expressions. Example "0 3
 
 ## Changelog
 
-v1.7.0 (Latest)
+v1.8.3 (Latest)
+
+Add feature to retry failed updates
+
+v1.7.0 
 
 More TZ fixes
 
